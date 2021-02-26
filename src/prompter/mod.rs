@@ -87,6 +87,7 @@ impl LocalPrompter {
     }
 
     fn get_response(&self) -> Result<String> {
+	print!("--> ");
         let mut response = String::new();
         let _ = stdout().flush();
         stdin()

@@ -1,6 +1,14 @@
 use crate::PlayerID;
 use std::fmt;
 
+const INCOME_VALUE : u8 = 1;
+const FOREIGN_AID_VALUE : u8 = 2;
+const STEAL_VALUE : u8 = 2;
+const TAX_VALUE : u8 = 3;
+const COUP_COST : u8 = 7;
+const ASSASSINATE_COST : u8 = 3;
+pub const EXCHANGE_CARDS : u8 = 2;
+
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -18,6 +26,25 @@ pub enum Action {
 }
 
 impl Action {
+    pub fn value(&self) -> u8 {
+	match self {
+	    Action::Income => INCOME_VALUE,
+	    Action::ForeignAid => FOREIGN_AID_VALUE,
+	    Action::Tax => TAX_VALUE,
+	    Action::Steal(..) => STEAL_VALUE,
+	    // TODO this should probably be somewhere else
+	    Action::Exchange => EXCHANGE_CARDS,
+	    _ => 0
+	}
+    }
+
+    pub fn cost(&self) -> u8 {
+	match self {
+	    Action::Assassinate(..) => ASSASSINATE_COST,
+	    Action::Coup(..) => COUP_COST,
+	    _ => 0,
+	}
+    }
     // Dependent on id of target
     pub fn blockable(&self, id: &PlayerID) -> Option<Vec<Action>> {
         match self {

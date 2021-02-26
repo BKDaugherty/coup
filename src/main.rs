@@ -3,9 +3,8 @@ mod logger;
 mod player;
 mod prompter;
 
-use action::Action;
+use action::{Action};
 use anyhow::Result;
-use structopt::clap::arg_enum;
 use enumset::{EnumSet, EnumSetType};
 use logger::local_logger::LocalLogger;
 use logger::traits::Logger;
@@ -18,14 +17,13 @@ use rand::seq::SliceRandom;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::fmt;
-use std::fmt::{Display};
+use std::fmt::Display;
+use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
 use std::{thread, time};
 
-
 // TODO if num_lives > num_cards just reduce num_lives
-
 // Game change turns
 // Every Player
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -59,7 +57,7 @@ impl PlayerConfig {
     fn new(player_type: PlayerType, player_name: String) -> Self {
         PlayerConfig {
             player_type,
-	    player_name,
+            player_name,
         }
     }
 }
@@ -88,7 +86,7 @@ pub struct Game {
     driver: GameDriver,
     state: GameState,
     logger: Box<dyn Logger>,
-    interactive: bool
+    interactive: bool,
 }
 
 impl Game {
@@ -115,40 +113,39 @@ impl Game {
         let mut state = GameState::new(num_cards, turn_order);
 
         let mut player_id = 0;
-	let mut interactive = false;
+        let mut interactive = false;
         for entry in players {
-	    let id = PlayerID(player_id.clone());
+            let id = PlayerID(player_id.clone());
             player_id = player_id + 1;
-	    let mut name = entry.player_name;
+            let mut name = entry.player_name;
             // Create Player
             let player = match entry.player_type {
                 PlayerType::DumbCPU => Box::new(DumbPlayer::new(id.clone())) as Box<dyn Player>,
                 PlayerType::RandomCPU => Box::new(RandomPlayer::new(id.clone())) as Box<dyn Player>,
                 PlayerType::Local => {
-		    // Existence of local player makes game interactive
-		    interactive = true;
-		    // Overrwrite name for local player
-		    let mut player_prompter = LocalPrompter::new();
-		    println!("Creating a new local player!\nPlease enter your name:");
-		    name = player_prompter.prompt_player(None).unwrap();
-		    player_prompter.set_name(name.clone());
-		    Box::new(HumanPlayer::new(id.clone(), player_prompter)) as Box<dyn Player>
-		}
+                    // Existence of local player makes game interactive
+                    interactive = true;
+                    // Overrwrite name for local player
+                    let mut player_prompter = LocalPrompter::new();
+                    println!("Creating a new local player!\nPlease enter your name:");
+                    name = player_prompter.prompt_player(None).unwrap();
+                    player_prompter.set_name(name.clone());
+                    Box::new(HumanPlayer::new(id.clone(), player_prompter)) as Box<dyn Player>
+                }
             };
-            state.player_states.insert(
-                id.clone(),
-                PlayerState::new(name, STARTING_LIVES),
-            );
+            state
+                .player_states
+                .insert(id.clone(), PlayerState::new(name, STARTING_LIVES));
 
             driver.players.insert(id.clone(), player);
         }
-	state.update_turn_order(driver.players.keys().cloned().collect());
+        state.update_turn_order(driver.players.keys().cloned().collect());
 
         Self {
             driver,
             state,
             logger,
-	    interactive,
+            interactive,
         }
     }
 
@@ -159,6 +156,7 @@ impl Game {
         &deck[0..deck_length].shuffle(&mut rng);
     }
 
+    // TODO make a decision here
     // Should this be in driver? Should driver be flattened to game?
     fn deal(&mut self, player_order: &Vec<PlayerID>) {
         for _ in 0..STARTING_CARDS {
@@ -179,15 +177,15 @@ impl Game {
     }
 
     fn wait(&self) {
-	let second = time::Duration::from_millis(1000);
-	let now = time::Instant::now();
-	thread::sleep(second);
+        let second = time::Duration::from_millis(1000);
+        let now = time::Instant::now();
+        thread::sleep(second);
     }
 
     fn wait_if_interactive(&self) {
-	if self.interactive {
-	    self.wait();
-	}
+        if self.interactive {
+            self.wait();
+        }
     }
 
     fn check_for_challenges(
@@ -214,35 +212,34 @@ impl Game {
     }
 
     pub fn setup(&mut self) {
-	// TODO - Establish turn order -> Roll for it? Then clockwise?
+        // TODO - Establish turn order -> Roll for it? Then clockwise?
         // Find a way not to do this twice
         let turn_order = self.driver.players.keys().cloned().collect();
         self.shuffle();
         self.deal(&turn_order);
         self.update_active_players(&turn_order);
 
-	// TODO --> Remove / detect if interactive mode.
-	// Could check for local players?
-	println!("Let the game begin!");
-	print!("The turn order is as follows: ");
-	for player in &turn_order {
-	    print!("{} ", self.state.get_player_name(player));
-	}
-	println!("");
+        // TODO --> Remove / detect if interactive mode.
+        // Could check for local players?
+        println!("Let the game begin!");
+        print!("The turn order is as follows: ");
+        for player in &turn_order {
+            print!("{} ", self.state.get_player_name(player));
+        }
+        println!("");
     }
 
     pub fn play(&mut self) {
-	self.setup();
-	let turn_order = self.driver.players.keys().cloned().collect();
+        self.setup();
+        let turn_order = self.driver.players.keys().cloned().collect();
         // Start Game Loop
         while !self.game_over(&turn_order) {
             // Need to check game over everytime state changes. --> Sad
             let active_players = &self.active_players(&turn_order);
             for active_id in active_players {
-		self.logger.log(format!(
-		    "{}'s turn!", self.state.get_player_name(active_id))
-		);
-		self.wait_if_interactive();
+                self.logger
+                    .log(format!("{}'s turn!", self.state.get_player_name(active_id)));
+                self.wait_if_interactive();
                 let player = self.driver.players.get(active_id).unwrap();
 
                 // Enforce Required Coup
@@ -252,6 +249,7 @@ impl Game {
                     Action::Coup(player.choose_forced_coup(&self.state))
                 };
 
+                let mut action_blocked = false;
                 self.logger.log(
                     format!(
                         "{} chose action {}",
@@ -267,18 +265,18 @@ impl Game {
 
                 // Allow for actions to be blocked
                 for blocker_id in active_players {
-		    // Don't block yourself
-		    if blocker_id == active_id {
-			continue;
-		    }
-		    
+                    // Don't block yourself
+                    if blocker_id == active_id {
+                        continue;
+                    }
+
                     if action.blockable(blocker_id).is_some() {
                         let blocker = self.driver.players.get(blocker_id).unwrap();
                         // actor steal from blocker
                         if let Some(blocking_action) =
                             blocker.will_block(&self.state, &active_id, &action)
                         {
-			    self.wait_if_interactive();
+                            self.wait_if_interactive();
                             // blocker block
                             self.logger.log(format!(
                                 "{} is blocking {}'s {} with {}",
@@ -290,29 +288,36 @@ impl Game {
                             if let Some(challenge) =
                                 self.check_for_challenges(blocker_id, &turn_order, &blocking_action)
                             {
+                                // TODO fix continues because they don't do the correct behavior as of now.
                                 // actor challenge your block
                                 block_was_challenged = true;
                                 if !self.process_challenge(&challenge) {
                                     //Challenge was unsuccessful, action is blocked, turn is over
-                                    continue;
-                                } // Challenge was successful, block is invalidated, action goes through
+                                    action_blocked = true;
+                                    break;
+                                } else {
+				    // Challenge was successful, block is invalidated action goes through
+				}
                             } else {
                                 // Block was unchallenged, do not allow anyone to challenge
-                                continue;
+                                action_blocked = true;
+                                break;
                             }
                         }
                     }
                 }
 
                 // TODO --> Do not allow for challenging of action if already blocked
-                if action.challengable() && !block_was_challenged {
+                if action.challengable() && !block_was_challenged && !action_blocked {
                     if let Some(challenge) =
                         self.check_for_challenges(active_id, &turn_order, &action)
                     {
-                        self.process_challenge(&challenge);
+                        if self.process_challenge(&challenge) {
+                            action_blocked = true;
+                        }
                     }
                 }
-                self.process_action(&action, active_id);
+                self.process_action(&action, active_id, action_blocked);
                 self.update_active_players(&turn_order);
 
                 // TODO --> This makes me very sad
@@ -321,7 +326,7 @@ impl Game {
                 }
             }
         }
-	self.wait_if_interactive();
+        self.wait_if_interactive();
         self.present_game_results();
     }
 
@@ -329,8 +334,8 @@ impl Game {
         let actor_id = &challenge.actor_id;
         let challenger_id = &challenge.challenger_id;
         let action = &challenge.action;
-	
-	self.wait_if_interactive();
+
+        self.wait_if_interactive();
         self.logger.log(format!(
             "{} is challenging {}'s {}",
             self.get_player_name(challenger_id),
@@ -347,16 +352,25 @@ impl Game {
         } else {
             winner_id = challenger_id;
         }
-	
-	self.wait_if_interactive();
+
+        self.wait_if_interactive();
         self.logger.log(format!(
             "{} lost the challenge",
             self.get_player_name(loser_id)
         ));
-	self.wait_if_interactive();
+        self.wait_if_interactive();
         self.kill_player(loser_id);
-        // let winner = self.driver.players.get_mut(winner_id).unwrap();
-        // TODO - Give winner a card from the deck
+
+	let mut deck = &mut self.driver.field.deck;
+	let card = deck.remove(0);
+	let winner = self.driver.players.get_mut(winner_id).unwrap();
+
+	if winner_id != challenger_id {
+	    match winner.take_card(&self.state, card.clone()) {
+		Some(dropped) => deck.push(dropped),
+		None => {}
+	    }
+	}
         return challenger_id == winner_id;
     }
 
@@ -377,20 +391,19 @@ impl Game {
 
     fn kill_player(&mut self, player_id: &PlayerID) {
         let mut victim = self.driver.players.get_mut(player_id).unwrap();
-	let num_lives_left = self.state.player_states.get(player_id).unwrap().num_lives;
-	if num_lives_left == 0 {
-	    self.logger.log(
-		format!("Tried to kill {} but they have no lives left!",
-			self.get_player_name(player_id)
-		)
-	    );
-	    return;
-	}
+        let num_lives_left = self.state.player_states.get(player_id).unwrap().num_lives;
+        if num_lives_left == 0 {
+            self.logger.log(format!(
+                "Tried to kill {} but they have no lives left!",
+                self.get_player_name(player_id)
+            ));
+            return;
+        }
         let to_discard = victim.choose_card_to_lose(&self.state);
         let discarded = victim.discard(to_discard).unwrap();
         self.logger.log(format!(
             "{} discarded {:#?}",
-	    self.get_player_name(player_id),
+            self.get_player_name(player_id),
             discarded
         ));
         let mut victim_state = self.state.player_states.get_mut(player_id).unwrap();
@@ -398,39 +411,51 @@ impl Game {
         victim_state.num_lives -= 1;
     }
 
-    fn process_action(&mut self, action: &Action, actor: &PlayerID) {
+    fn process_action(&mut self, action: &Action, actor: &PlayerID, action_blocked: bool) {
         match action {
-            // TODO All constants should be defined
             Action::Income => {
                 let mut player = self.state.player_states.get_mut(&actor).unwrap();
-                player.num_coins += 1;
+                player.num_coins += action.value();
             }
             Action::ForeignAid => {
                 let mut player = self.state.player_states.get_mut(&actor).unwrap();
-                player.num_coins += 2;
+                if !action_blocked {
+                    player.num_coins += action.value();
+                }
             }
             Action::Tax => {
                 let mut player = self.state.player_states.get_mut(&actor).unwrap();
-                player.num_coins += 3;
+                if !action_blocked {
+                    player.num_coins += action.value();
+                }
             }
             Action::Steal(target) => {
                 let mut target = self.state.player_states.get_mut(&target).unwrap();
-                let coins_to_steal = min(target.num_coins, 2);
-                target.num_coins -= coins_to_steal;
-                let mut player = self.state.player_states.get_mut(&actor).unwrap();
-                player.num_coins += coins_to_steal;
+                if !action_blocked {
+                    let coins_to_steal = min(target.num_coins, action.value());
+                    target.num_coins -= coins_to_steal;
+                    let mut player = self.state.player_states.get_mut(&actor).unwrap();
+                    player.num_coins += coins_to_steal;
+                }
             }
-            // TODO Trying a blocked assassination should still result in side effect
             Action::Assassinate(target) => {
                 let mut player = self.state.player_states.get_mut(&actor).unwrap();
-                player.num_coins -= 3;
-                self.kill_player(target);
+                player.num_coins -= action.cost();
+                if !action_blocked {
+                    self.kill_player(target);
+                }
             }
             Action::Coup(target) => {
                 let mut player = self.state.player_states.get_mut(&actor).unwrap();
-                player.num_coins -= 7;
+                player.num_coins -= action.cost();
                 self.kill_player(target);
-            }
+            },
+	    Action::Exchange => {
+		let mut player = self.driver.players.get_mut(&actor).unwrap();
+		let num_cards = action.value();
+		// player.choose_card_to_replace(state, 
+		
+	    },
             _ => {
                 self.logger
                     .log(format!("Unknown action... Moving on {:?}", action).to_string());
@@ -466,22 +491,19 @@ impl Game {
 
 impl fmt::Display for GameState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-	// Print Player States
-	for player in &self.turn_order {
-	    let player_state = self.player_states.get(player);
-	    match player_state {
-		Some(player_state) => {
-		    println!("{}", player_state);
-		},
-		None => {
-		    panic!("Turn order and player states out of sync")
-		}
-	    }
-	}
-	Ok(())
+        // Print Player States
+        for player in &self.turn_order {
+            let player_state = self.player_states.get(player);
+            match player_state {
+                Some(player_state) => {
+                    println!("{}", player_state);
+                }
+                None => panic!("Turn order and player states out of sync"),
+            }
+        }
+        Ok(())
     }
 }
-
 
 impl GameState {
     fn new(num_cards: u8, turn_order: Vec<PlayerID>) -> Self {
@@ -497,7 +519,7 @@ impl GameState {
         self.player_states.get(&player_id).unwrap().get_name()
     }
     fn update_turn_order(&mut self, turn_order: Vec<PlayerID>) {
-	self.turn_order = turn_order;
+        self.turn_order = turn_order;
     }
 }
 
@@ -521,21 +543,19 @@ pub struct PlayerState {
 
 impl fmt::Display for PlayerState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-	write!(f, "{}:\n", self.player_name);
-	write!(f, "\tLives: {}\n", self.num_lives);
-	write!(f, "\tCoins: {}\n", self.num_coins);
-	if self.lost_lives.len() > 0 {
-	    write!(f, "\tLost Identities: ");
-	    for life in &self.lost_lives {
-		write!(f, "{:?} ", life);
-	    }
-	    write!(f, "\n");
-	}
-	Ok(())
+        write!(f, "{}:\n", self.player_name);
+        write!(f, "\tLives: {}\n", self.num_lives);
+        write!(f, "\tCoins: {}\n", self.num_coins);
+        if self.lost_lives.len() > 0 {
+            write!(f, "\tLost Identities: ");
+            for life in &self.lost_lives {
+                write!(f, "{:?} ", life);
+            }
+            write!(f, "\n");
+        }
+        Ok(())
     }
- 
 }
-
 
 impl PlayerState {
     pub fn new(player_name: String, num_lives: u8) -> Self {
@@ -615,7 +635,7 @@ const REQUIRE_COUP_COINS: u8 = 10;
 #[structopt(name = "Coup Simulator CLI", setting = structopt::clap::AppSettings::ColoredHelp)]
 struct GameConfig {
     /// The Identitites to use for this game
-    #[structopt(long, possible_values = &Identity::variants(), value_delimiter = ",", default_value = "Ambassador,Assassin,Contessa,Captain,Duke")] //default_value = "Ambassador Assassin Contessa Captain Duke")]
+    #[structopt(long, possible_values = &Identity::variants(), value_delimiter = ",", default_value = "Ambassador,Assassin,Contessa,Captain,Duke")]
     game_identities: Vec<Identity>,
     /// The number of cards each player begins the game with
     #[structopt(long, default_value = "2")]
@@ -633,33 +653,31 @@ struct GameConfig {
     #[structopt(long, default_value = "1")]
     num_local_players: u8,
     /// The names of the Random CPUS in this simulation
-    #[structopt(long, value_delimiter = ",", default_value = "Porter,Miela")]
+    #[structopt(long, value_delimiter = ",")]
     random_cpus: Vec<String>,
     /// The names of the Dumb CPUS in this simulation
-    #[structopt(long, value_delimiter = ",", default_value = "Don")]
-    dumb_cpus: Vec<String>
-    
-
+    #[structopt(long, value_delimiter = ",")]
+    dumb_cpus: Vec<String>,
 }
 
 fn main() -> Result<()> {
     log::set_logger(&LOGGER).map(|()| log::set_max_level(LevelFilter::Info));
 
     let config = GameConfig::from_args();
-    
-    let game_identities : EnumSet<Identity> = config.game_identities.into_iter().collect();
+
+    let game_identities: EnumSet<Identity> = config.game_identities.into_iter().collect();
     let mut players = Vec::new();
     for cpu in &config.dumb_cpus {
-	players.push(PlayerConfig::new(PlayerType::DumbCPU, cpu.clone()));
+        players.push(PlayerConfig::new(PlayerType::DumbCPU, cpu.clone()));
     }
 
     for cpu in &config.random_cpus {
-	players.push(PlayerConfig::new(PlayerType::RandomCPU, cpu.clone()));
+        players.push(PlayerConfig::new(PlayerType::RandomCPU, cpu.clone()));
     }
 
     for player in 0..config.num_local_players {
-	// TODO make name optional / not needed for local player config
-	players.push(PlayerConfig::new(PlayerType::Local, "".to_string()));
+        // TODO make name optional / not needed for local player config
+        players.push(PlayerConfig::new(PlayerType::Local, "".to_string()));
     }
     let mut game = Game::new(game_identities, players, LoggerType::Local);
     game.play();
